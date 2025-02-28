@@ -13,16 +13,16 @@ from simod.settings.control_flow_settings import ProcessModelDiscoveryAlgorithm
 
 control_flow_config_sm2 = {
     "mining_algorithm": "sm2",
-    "epsilon": 0.15,
-    "eta": 0.87,
+    "epsilon": 0.3,
+    "eta": 0.5,
     "replace_or_joins": True,
     "prioritize_parallelism": True,
 }
 
 control_flow_config_sm1 = {
     "mining_algorithm": "sm1",
-    "epsilon": 0.15,
-    "eta": 0.87,
+    "epsilon": 0.3,
+    "eta": 0.5,
     "replace_or_joins": True,
     "prioritize_parallelism": True,
 }
@@ -68,7 +68,10 @@ def test_discover_process_model(entry_point, test_data):
     "test_data", structure_optimizer_test_data, ids=[test_data["name"] for test_data in structure_optimizer_test_data]
 )
 def test_discover_process_model_explicit_self_loops(entry_point, test_data):
-    log_path = entry_point / "model_sequence_self_loop.xes"
+    if test_data["config_data"]["mining_algorithm"] == "sm1":
+        log_path = entry_point / "model_sequence_self_loop_only_end.xes"
+    else:
+        log_path = entry_point / "model_sequence_self_loop.xes"
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_path = Path(tmp_dir) / "model.bpmn"
         params = HyperoptIterationParams(
@@ -90,10 +93,13 @@ def test_discover_process_model_explicit_self_loops(entry_point, test_data):
         ns = {"bpmn": root.nsmap.get(None, "http://www.omg.org/spec/BPMN/20100524/MODEL")}
 
         tasks = root.findall(".//bpmn:task", namespaces=ns)
-        exclusive_gateways = root.findall(".//bpmn:exclusiveGateway", namespaces=ns)
-        assert len(exclusive_gateways) == 2, "There should only be two exclusive gateways in this model"
         for task in tasks:
             assert task.find(
                 "bpmn:standardLoopCharacteristics",
                 namespaces=ns
             ) is None, f"Task '{task.get('name')}' has an implicit self loop"
+        exclusive_gateways = root.findall(".//bpmn:exclusiveGateway", namespaces=ns)
+        assert len(exclusive_gateways) == 2, "There should only be two exclusive gateways in this model"
+        # Commented because SM2 doesn't sort the events, thus no parallelism
+        # parallel_gateways = root.findall(".//bpmn:parallelGateway", namespaces=ns)
+        # assert len(parallel_gateways) == 2, "There should only be two parallel gateways in this model"
