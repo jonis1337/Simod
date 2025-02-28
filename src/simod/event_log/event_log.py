@@ -2,11 +2,12 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+import pendulum
+from openxes_cli.lib import csv_to_xes
 from pix_framework.io.event_log import DEFAULT_XES_IDS, EventLogIDs, read_csv_log
 from pix_framework.io.event_log import split_log_training_validation_trace_wise as split_log
 
 from .preprocessor import Preprocessor
-from .utilities import convert_df_to_xes
 from ..settings.preprocessing_settings import PreprocessingSettings
 from ..utilities import get_process_name_from_log_path
 
@@ -150,7 +151,7 @@ class EventLog:
             process_name=get_process_name_from_log_path(train_log_path) if process_name is None else process_name,
         )
 
-    def train_to_xes(self, path: Path):
+    def train_to_xes(self, path: Path, only_complete_events: bool = False):
         """
         Saves the training log to an XES file.
 
@@ -158,10 +159,13 @@ class EventLog:
         ----------
         path : :class:`pathlib.Path`
             Destination path for the XES file.
+        only_complete_events : bool
+            If true, generate XES file containing only events corresponding to
+            the end of each activity instance.
         """
-        write_xes(self.train_partition, self.log_ids, path)
+        write_xes(self.train_partition, self.log_ids, path, only_complete_events=only_complete_events)
 
-    def validation_to_xes(self, path: Path):
+    def validation_to_xes(self, path: Path, only_complete_events: bool = False):
         """
         Saves the validation log to an XES file.
 
@@ -169,10 +173,13 @@ class EventLog:
         ----------
         path : :class:`pathlib.Path`
             Destination path for the XES file.
+        only_complete_events : bool
+            If true, generate XES file containing only events corresponding to
+            the end of each activity instance.
         """
-        write_xes(self.validation_partition, self.log_ids, path)
+        write_xes(self.validation_partition, self.log_ids, path, only_complete_events=only_complete_events)
 
-    def train_validation_to_xes(self, path: Path):
+    def train_validation_to_xes(self, path: Path, only_complete_events: bool = False):
         """
         Saves the combined training and validation log to an XES file.
 
@@ -180,10 +187,13 @@ class EventLog:
         ----------
         path : :class:`pathlib.Path`
             Destination path for the XES file.
+        only_complete_events : bool
+            If true, generate XES file containing only events corresponding to
+            the end of each activity instance.
         """
-        write_xes(self.train_validation_partition, self.log_ids, path)
+        write_xes(self.train_validation_partition, self.log_ids, path, only_complete_events=only_complete_events)
 
-    def test_to_xes(self, path: Path):
+    def test_to_xes(self, path: Path, only_complete_events: bool = False):
         """
         Saves the test log to an XES file.
 
@@ -191,19 +201,39 @@ class EventLog:
         ----------
         path : :class:`pathlib.Path`
             Destination path for the XES file.
+        only_complete_events : bool
+            If true, generate XES file containing only events corresponding to
+            the end of each activity instance.
         """
-        write_xes(self.test_partition, self.log_ids, path)
+        write_xes(self.test_partition, self.log_ids, path, only_complete_events=only_complete_events)
 
 
 def write_xes(
-    log: pd.DataFrame,
+    event_log: pd.DataFrame,
     log_ids: EventLogIDs,
     output_path: Path,
+    only_complete_events: bool = False,
 ):
     """
     Writes the log to a file in XES format.
     """
-    df = log.rename(
+    # Copy event log to modify
+    df = event_log.copy()
+    # Transform timestamps to expected format
+    xes_datetime_format = "YYYY-MM-DDTHH:mm:ss.SSSZ"
+    # Start time
+    if only_complete_events:
+        df[log_ids.start_time] = ""
+    else:
+        df[log_ids.start_time] = df[log_ids.start_time].apply(
+            lambda x: pendulum.parse(x.isoformat()).format(xes_datetime_format)
+        )
+    # End time
+    df[log_ids.end_time] = df[log_ids.end_time].apply(
+        lambda x: pendulum.parse(x.isoformat()).format(xes_datetime_format)
+    )
+    # Rename columns to XES expected
+    df = df.rename(
         columns={
             log_ids.activity: "concept:name",
             log_ids.case: "case:concept:name",
@@ -211,18 +241,9 @@ def write_xes(
             log_ids.start_time: "start_timestamp",
             log_ids.end_time: "time:timestamp",
         }
-    )
-
-    df = df[
-        [
-            "case:concept:name",
-            "concept:name",
-            "org:resource",
-            "start_timestamp",
-            "time:timestamp",
-        ]
-    ]
-
+    )[["case:concept:name", "concept:name", "org:resource", "start_timestamp", "time:timestamp", ]]
+    # Fill null values
     df.fillna("UNDEFINED", inplace=True)
-
-    convert_df_to_xes(df, DEFAULT_XES_IDS, output_path)
+    # Write and convert
+    df.to_csv(output_path, index=False)
+    csv_to_xes(output_path, output_path)

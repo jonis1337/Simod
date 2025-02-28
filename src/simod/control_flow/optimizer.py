@@ -91,8 +91,10 @@ class ControlFlowOptimizer:
             # Not provided, create path to best discovered model
             self._need_to_discover_model = True
             # Export training log (XES format) for SplitMiner
-            self._xes_train_log_path = self.base_directory / (self.event_log.process_name + ".xes")
-            self.event_log.train_to_xes(self._xes_train_log_path)
+            self._xes_train_both_timestamps_log_path = self.base_directory / (self.event_log.process_name + ".xes")
+            self.event_log.train_to_xes(self._xes_train_both_timestamps_log_path)
+            self._xes_train_only_end_log_path = self.base_directory / (self.event_log.process_name + "_only_end.xes")
+            self.event_log.train_to_xes(self._xes_train_only_end_log_path, only_complete_events=True)
         else:
             # Process model provided
             self._need_to_discover_model = False
@@ -360,7 +362,10 @@ class ControlFlowOptimizer:
     def _discover_process_model(self, params: HyperoptIterationParams) -> Path:
         print_step(f"Discovering Process Model with {params.mining_algorithm.value}")
         output_model_path = get_process_model_path(params.output_dir, self.event_log.process_name)
-        discover_process_model(self._xes_train_log_path, output_model_path, params)
+        if params.mining_algorithm is ProcessModelDiscoveryAlgorithm.SPLIT_MINER_V1:
+            discover_process_model(self._xes_train_only_end_log_path, output_model_path, params)
+        else:
+            discover_process_model(self._xes_train_both_timestamps_log_path, output_model_path, params)
         return output_model_path
 
     def _discover_branch_rules(self, process_model: Path, params: HyperoptIterationParams) -> List[BranchRules]:
