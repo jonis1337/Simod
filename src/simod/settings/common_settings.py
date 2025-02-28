@@ -86,7 +86,7 @@ class Metric(str, Enum):
             return cls.THREE_GRAM_DISTANCE
         elif value.lower() in ["circadian_event_distribution", "circadian_emd"]:
             return cls.CIRCADIAN_EMD
-        elif value.lower() in ["circadian_workforce_distribution", "workforce_emd", "workforce_distribution"]:
+        elif value.lower() in ["circadian_workforce_distribution", "workforce_emd", "circadian_workforce"]:
             return cls.CIRCADIAN_WORKFORCE_EMD
         elif value.lower() in ["arrival_event_distribution", "arrival_emd"]:
             return cls.ARRIVAL_EMD
