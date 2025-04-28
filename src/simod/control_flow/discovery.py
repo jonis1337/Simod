@@ -143,8 +143,8 @@ def add_bpmn_diagram_to_model(bpmn_model_path: Path):
     args = [
         "java",
         "-jar",
-        '"' + str(bpmn_layout_jar_path) + '"',
-        '"' + str(bpmn_model_path) + '"'
+        str(bpmn_layout_jar_path),
+        str(bpmn_model_path)
     ]
     print_step(f"Adding BPMN diagram to the model: {args}")
     execute_external_command(args)
